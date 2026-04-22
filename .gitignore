@@ -1,0 +1,87 @@
+# ─── Python / Backend ─────────────────────────────────────────────────────────
+
+# Virtual environment
+backend/venv/
+
+# Byte-compiled / cache
+backend/src/__pycache__/
+backend/src/routes/__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Environment variables — NEVER commit secrets
+backend/src/.env
+.env
+.env.local
+.env.production
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+
+# Dependencies — reinstall with npm install
+backend/src/frontend/node_modules/
+
+# Vite dev cache
+backend/src/frontend/.vite/
+
+# Local env files
+backend/src/frontend/.env
+backend/src/frontend/.env.local
+backend/src/frontend/.env.development.local
+backend/src/frontend/.env.production.local
+
+# Build logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# NOTE: frontend/dist/ is intentionally NOT ignored
+# Railway needs the built files to serve the React app
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+# Keep .vscode/extensions.json if you want to share recommended extensions
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+
+# Logs
+*.log
+logs/
+
+# MongoDB dumps
+*.bson
+*.json.gz
