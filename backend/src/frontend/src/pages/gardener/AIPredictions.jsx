@@ -128,7 +128,7 @@ export default function AIPredictions() {
         <PredCard
           icon="🌿"
           title="Plant Health"
-          member="Himansa · Random Forest"
+          member="· Random Forest"
           label={ph.prediction || '—'}
           confidence={ph.confidence || 0}
           isAlert={ph.prediction === 'Critical' || ph.prediction === 'Warning'}
@@ -145,7 +145,7 @@ export default function AIPredictions() {
         <PredCard
           icon="💧"
           title="Watering Need (next 1 hour)"
-          member="Anupama · Random Forest"
+          member="· Random Forest"
           label={wn.label || '—'}
           confidence={wn.confidence || 0}
           isAlert={wn.needs_water === true}
@@ -160,7 +160,7 @@ export default function AIPredictions() {
         <PredCard
           icon="🪣"
           title="Water Tank (next 2 hours)"
-          member="Sadith · Random Forest"
+          member="· Random Forest"
           label={td.label || '—'}
           confidence={td.confidence || 0}
           isAlert={td.will_run_low === true}
@@ -175,7 +175,7 @@ export default function AIPredictions() {
         <div style={{ ...styles.predCard, background: '#161f18', borderColor: '#243d28' }}>
           <div style={styles.predTop}>
             <span style={{ fontSize: '22px' }}>📈</span>
-            <span style={styles.memberTag}>Rashini · XGBoost</span>
+            <span style={styles.memberTag}>· XGBoost</span>
           </div>
           <div style={styles.predTitle}>Risk Score Forecast</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', margin: '8px 0' }}>

@@ -14,10 +14,7 @@ export default function Alerts() {
   useEffect(() => {
     const fetch = () => {
       api.get('/sensor/alerts?limit=100')
-        .then(r => {
-          setAlerts(r.data)
-          setLastUpdated(new Date())
-        })
+        .then(r => { setAlerts(r.data); setLastUpdated(new Date()) })
         .catch(console.error)
         .finally(() => setLoading(false))
     }
@@ -70,7 +67,7 @@ export default function Alerts() {
       {!loading && alerts.length > 0 && (
         <div style={styles.table}>
           <div style={styles.thead}>
-            {['Time', 'Health', 'Risk', 'Score', 'Soil %', 'Temp °C', 'Root Status', 'Light'].map(h => (
+            {['Time', 'Health', 'Risk Level', 'Risk Score', 'Soil %', 'Temp °C', 'Root Status', 'ESP32 Alert'].map(h => (
               <div key={h} style={styles.th}>{h}</div>
             ))}
           </div>
@@ -89,24 +86,26 @@ export default function Alerts() {
                   <span style={{
                     padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700',
                     background: isCrit ? '#7f1d1d44' : '#78350f44',
-                    color:      isCrit ? '#f87171'   : '#fbbf24',
-                    border:     `1px solid ${isCrit ? '#991b1b' : '#92400e'}`,
+                    color: isCrit ? '#f87171' : '#fbbf24',
+                    border: `1px solid ${isCrit ? '#991b1b' : '#92400e'}`,
                   }}>{a.plant_health}</span>
                 </div>
                 <div style={styles.td}>
                   <span style={{
                     padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: '600',
                     background: a.Risk_level === 'High' ? '#7f1d1d44' : '#78350f44',
-                    color:      a.Risk_level === 'High' ? '#f87171'   : '#fbbf24',
+                    color: a.Risk_level === 'High' ? '#f87171' : '#fbbf24',
                   }}>{a.Risk_level}</span>
                 </div>
                 <div style={{ ...styles.td, fontFamily: "'DM Mono', monospace", color: isCrit ? '#f87171' : '#fbbf24' }}>
                   {a.risk_score?.toFixed(1)}
                 </div>
-                <div style={{ ...styles.td, fontFamily: "'DM Mono', monospace" }}>{a['soil_moisture_%']?.toFixed(1)}</div>
-                <div style={{ ...styles.td, fontFamily: "'DM Mono', monospace" }}>{a.temperature_C?.toFixed(1)}</div>
+                <div style={{ ...styles.td, fontFamily: "'DM Mono', monospace" }}>{a.soil_moisture?.toFixed(1)}</div>
+                <div style={{ ...styles.td, fontFamily: "'DM Mono', monospace" }}>{a.air_temp?.toFixed(1)}</div>
                 <div style={styles.td}>{a.Root_Water_status}</div>
-                <div style={styles.td}>{a.light_status}</div>
+                <div style={{ ...styles.td, fontSize: '11px', color: a.alert === 'NORMAL' ? '#4ade80' : '#fbbf24' }}>
+                  {a.alert || '—'}
+                </div>
               </div>
             )
           })}
@@ -121,31 +120,19 @@ const styles = {
   title:  { fontSize: '22px', fontWeight: '700', color: '#e8f5e9', letterSpacing: '-0.03em' },
   sub:    { fontSize: '12px', color: '#4a6b4e', marginTop: '3px' },
   summaryRow: { display: 'flex', gap: '14px', marginBottom: '20px' },
-  summaryCard: {
-    flex: 1, background: '#161f18', border: '1px solid',
-    borderRadius: '12px', padding: '16px 20px',
-    display: 'flex', flexDirection: 'column', gap: '4px',
-  },
+  summaryCard: { flex: 1, background: '#161f18', border: '1px solid', borderRadius: '12px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' },
   summaryNum: { fontFamily: "'DM Mono', monospace", fontSize: '32px', fontWeight: '500', color: '#f87171' },
   loader: { color: '#86a98a', fontFamily: "'DM Mono', monospace", padding: '20px' },
-  empty: {
-    textAlign: 'center', padding: '60px',
-    background: '#161f18', border: '1px solid #243d28', borderRadius: '14px',
-  },
-  table: {
-    background: '#161f18', border: '1px solid #243d28',
-    borderRadius: '14px', overflow: 'hidden',
-  },
+  empty: { textAlign: 'center', padding: '60px', background: '#161f18', border: '1px solid #243d28', borderRadius: '14px' },
+  table: { background: '#161f18', border: '1px solid #243d28', borderRadius: '14px', overflow: 'hidden' },
   thead: {
-    display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr',
-    padding: '12px 16px', background: '#0d1410',
-    borderBottom: '1px solid #243d28',
+    display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.9fr 0.8fr 0.7fr 0.7fr 1fr 1fr',
+    padding: '12px 16px', background: '#0d1410', borderBottom: '1px solid #243d28',
   },
   th: { fontSize: '10px', fontWeight: '700', color: '#4a6b4e', textTransform: 'uppercase', letterSpacing: '0.06em' },
   trow: {
-    display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr 0.8fr',
-    padding: '11px 16px', borderBottom: '1px solid',
-    transition: 'background 0.1s',
+    display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.9fr 0.8fr 0.7fr 0.7fr 1fr 1fr',
+    padding: '11px 16px', borderBottom: '1px solid', transition: 'background 0.1s',
   },
   td: { fontSize: '13px', color: '#e8f5e9', display: 'flex', alignItems: 'center' },
 }

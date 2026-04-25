@@ -18,5 +18,5 @@ client = MongoClient(MONGO_URI)
 db     = client[DB_NAME]
 
 # Collections
-sensor_col = db["plant_data"]
+sensor_col = db["orchid_data"]
 users_col  = db["users"]

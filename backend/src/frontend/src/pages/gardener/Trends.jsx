@@ -28,7 +28,7 @@ export default function Trends() {
   const [lastUpdated, setLastUpdated] = useState(null)
 
   useEffect(() => {
-    const fetch = () => {
+    const fetchData = () => {
       api.get('/sensor/today')
         .then(r => {
           setData(r.data.map(d => ({ ...d, time: timeFmt(d.timestamp) })))
@@ -37,8 +37,8 @@ export default function Trends() {
         .catch(console.error)
         .finally(() => setLoading(false))
     }
-    fetch()
-    const interval = setInterval(fetch, 30000)
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -49,30 +49,30 @@ export default function Trends() {
       title: 'Soil Moisture & Water Level',
       sub: 'Capacitive Sensor + Water Level Sensor (last 24h)',
       lines: [
-        { key: 'soil_moisture_%', name: 'Soil Moisture %', color: '#4ade80' },
-        { key: 'water_level_%',   name: 'Water Level %',   color: '#22d3ee' },
+        { key: 'soil_moisture',       name: 'Soil Moisture %', color: '#4ade80' },
+        { key: 'water_level_percent', name: 'Water Level %',   color: '#22d3ee' },
       ]
     },
     {
       title: 'Temperature',
       sub: 'BME280 Air Temp + DS18B20 Water Temp (last 24h)',
       lines: [
-        { key: 'temperature_C',       name: 'Air Temp °C',   color: '#f97316' },
-        { key: 'water_temperature_C', name: 'Water Temp °C', color: '#34d399' },
+        { key: 'air_temp',   name: 'Air Temp °C',   color: '#f97316' },
+        { key: 'water_temp', name: 'Water Temp °C', color: '#34d399' },
       ]
     },
     {
-      title: 'Humidity & Light',
-      sub: 'BME280 Humidity + LDR Light (last 24h)',
+      title: 'Humidity',
+      sub: 'BME280 Humidity (last 24h)',
       lines: [
-        { key: 'humidity_%',     name: 'Humidity %', color: '#60a5fa' },
+        { key: 'air_humidity', name: 'Humidity %', color: '#60a5fa' },
       ]
     },
     {
       title: 'Light Level (lux)',
       sub: 'LDR Sensor (last 24h)',
       lines: [
-        { key: 'light_level_lux', name: 'Light lux', color: '#fbbf24' },
+        { key: 'light_lux', name: 'Light lux', color: '#fbbf24' },
       ]
     },
   ]
@@ -95,7 +95,8 @@ export default function Trends() {
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1a2e1d" />
-                <XAxis dataKey="time" tick={{ fill: '#4a6b4e', fontSize: 10, fontFamily: "'DM Mono'" }}
+                <XAxis dataKey="time"
+                  tick={{ fill: '#4a6b4e', fontSize: 10, fontFamily: "'DM Mono'" }}
                   interval={Math.floor(data.length / 8)} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fill: '#4a6b4e', fontSize: 10, fontFamily: "'DM Mono'" }}
                   tickLine={false} axisLine={false} />
@@ -107,7 +108,6 @@ export default function Trends() {
                 ))}
               </LineChart>
             </ResponsiveContainer>
-            {/* Legend */}
             <div style={styles.legend}>
               {chart.lines.map(l => (
                 <div key={l.key} style={styles.legendItem}>
@@ -129,12 +129,9 @@ const styles = {
   title:  { fontSize: '22px', fontWeight: '700', color: '#e8f5e9', letterSpacing: '-0.03em' },
   sub:    { fontSize: '12px', color: '#4a6b4e', marginTop: '3px', fontFamily: "'DM Mono', monospace" },
   grid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))', gap: '16px' },
-  card: {
-    background: '#161f18', border: '1px solid #243d28',
-    borderRadius: '14px', padding: '20px',
-  },
+  card:      { background: '#161f18', border: '1px solid #243d28', borderRadius: '14px', padding: '20px' },
   cardTitle: { fontWeight: '600', fontSize: '15px', color: '#e8f5e9', marginBottom: '3px' },
   cardSub:   { fontSize: '11px', color: '#4a6b4e', marginBottom: '16px', fontFamily: "'DM Mono', monospace" },
-  legend: { display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap' },
+  legend:     { display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap' },
   legendItem: { display: 'flex', alignItems: 'center', gap: '6px' },
 }

@@ -1,15 +1,19 @@
 """
 routes/prediction_routes.py
 ---------------------------
-Loads all 4 trained ML models on startup and serves predictions
-based on the latest sensor reading from MongoDB.
+Updated for new dataset field names.
 
-Endpoints:
-  GET /predict/gardener        → plant health, watering need, tank depletion, risk score
-  GET /predict/owner/insights  → feature importances + model accuracy summary
+The ML models were trained on OLD field names:
+  temperature_C, humidity_%, pressure_hPa, soil_moisture_%,
+  light_level_lux, water_level_%, water_temperature_C
 
-To swap models later: just replace the .pkl files in backend/src/models/
-No code changes needed anywhere.
+New MongoDB field names:
+  air_temp, air_humidity, air_pressure, soil_moisture,
+  light_lux, water_level_percent, water_temp
+
+The extract() function maps new → old automatically so models
+work without retraining. When you retrain on the new dataset,
+just update the FEATURE sets below.
 """
 import os
 import joblib
@@ -22,13 +26,13 @@ from config import sensor_col
 
 router = APIRouter(prefix="/predict", tags=["Predictions"])
 
-# ── Load all 4 models once on startup ─────────────────────────────────────────
+# ── Load models ───────────────────────────────────────────────────────────────
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 
 def load_model(filename):
     path = os.path.join(MODELS_DIR, filename)
     if not os.path.exists(path):
-        print(f"  ⚠  Model not found: {filename} — endpoint will return error")
+        print(f"  ⚠  Model not found: {filename}")
         return None
     model = joblib.load(path)
     print(f"  ✓  Loaded: {filename}")
@@ -41,7 +45,18 @@ tank_depletion_model = load_model("rf_water_level_depletion_model.pkl")
 risk_score_model     = load_model("xgb_risk_forecast_model_V2.pkl")
 print("[ML] Done.\n")
 
-# ── Feature sets — must exactly match training order ──────────────────────────
+# ── Field mapping: new DB name → old training name ────────────────────────────
+FIELD_MAP = {
+    "temperature_C":     "air_temp",
+    "humidity_%":        "air_humidity",
+    "pressure_hPa":      "air_pressure",
+    "soil_moisture_%":   "soil_moisture",
+    "light_level_lux":   "light_lux",
+    "water_level_%":     "water_level_percent",
+    "water_temperature_C": "water_temp",
+}
+
+# ── Feature sets (OLD names — what the models expect) ─────────────────────────
 PLANT_HEALTH_FEATURES = [
     "temperature_C", "humidity_%", "pressure_hPa",
     "soil_moisture_%", "light_level_lux",
@@ -67,9 +82,16 @@ def get_latest_reading():
         raise HTTPException(status_code=404, detail="No sensor data found")
     return doc
 
-def extract(doc, features):
-    """Pull feature values from MongoDB doc in correct column order."""
-    return np.array([[doc.get(f, 0) for f in features]])
+def extract(doc, old_feature_names):
+    """
+    Extract feature values using old feature names.
+    Looks up the new field name via FIELD_MAP, falls back to old name.
+    """
+    values = []
+    for old_name in old_feature_names:
+        new_name = FIELD_MAP.get(old_name, old_name)
+        values.append(doc.get(new_name, doc.get(old_name, 0)) or 0)
+    return np.array([values])
 
 def fmt_ts(ts):
     return ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
@@ -81,20 +103,16 @@ def fmt_ts(ts):
 def get_gardener_predictions(
     user=Depends(require_role("gardener", "owner", "admin"))
 ):
-    """
-    Returns all 4 predictions based on the most recent sensor reading.
-    Used by the Gardener AI Predictions page.
-    """
     doc = get_latest_reading()
 
     result = {
         "based_on_timestamp": fmt_ts(doc.get("timestamp")),
         "current_readings": {
-            "soil_moisture": doc.get("soil_moisture_%"),
-            "temperature":   doc.get("temperature_C"),
-            "humidity":      doc.get("humidity_%"),
-            "water_level":   doc.get("water_level_%"),
-            "light_lux":     doc.get("light_level_lux"),
+            "soil_moisture": doc.get("soil_moisture"),
+            "temperature":   doc.get("air_temp"),
+            "humidity":      doc.get("air_humidity"),
+            "water_level":   doc.get("water_level_percent"),
+            "light_lux":     doc.get("light_lux"),
         }
     }
 
@@ -144,14 +162,26 @@ def get_gardener_predictions(
     if risk_score_model:
         X         = extract(doc, RISK_SCORE_FEATURES)
         predicted = float(risk_score_model.predict(X)[0])
-        actual    = float(doc.get("risk_score", 0))
-        diff      = round(predicted - actual, 2)
+        # Derive current risk score using same formula as sensor_routes
+        soil  = doc.get("soil_moisture", 0) or 0
+        water = doc.get("water_level_percent", 0) or 0
+        temp  = doc.get("air_temp", 25) or 25
+        humid = doc.get("air_humidity", 50) or 50
+        lux   = doc.get("light_lux", 0) or 0
+        actual = min(100, max(0,
+            (max(0, (40 - soil) * 1.2) if soil < 40 else 0) +
+            (max(0, (30 - water) * 1.5) if water < 30 else 0) +
+            (max(0, (temp - 30) * 2.0) if temp > 30 else 0) +
+            (5 if humid > 80 else 0) +
+            (3 if lux < 500 else 0)
+        ))
+        diff = round(predicted - actual, 2)
         result["risk_score"] = {
             "predicted":  round(predicted, 2),
             "actual":     round(actual, 2),
             "difference": diff,
             "trend":      "↑ Rising" if diff > 1 else ("↓ Falling" if diff < -1 else "→ Stable"),
-            "level":      "High" if predicted > 50 else ("Medium" if predicted > 30 else "Low"),
+            "level":      "High" if predicted > 50 else ("Medium" if predicted > 25 else "Low"),
         }
     else:
         result["risk_score"] = {"error": "Model not loaded"}
@@ -165,46 +195,44 @@ def get_gardener_predictions(
 def get_owner_insights(
     user=Depends(require_role("owner", "admin"))
 ):
-    """
-    Returns feature importances and model accuracy summary
-    for the Owner AI Insights section.
-    """
     result = {}
 
-    # Feature importance from Plant Health model
+    # Clean feature labels for display (map old names to readable labels)
+    LABEL_MAP = {
+        "temperature_C":     "Air Temp",
+        "humidity_%":        "Humidity",
+        "pressure_hPa":      "Pressure",
+        "soil_moisture_%":   "Soil Moisture",
+        "light_level_lux":   "Light Level",
+        "water_level_%":     "Water Level",
+        "water_temperature_C": "Water Temp",
+    }
+
     if plant_health_model and hasattr(plant_health_model, "feature_importances_"):
         imps = plant_health_model.feature_importances_
         result["plant_health_importance"] = [
-            {"feature": f.replace("_%", " %").replace("_", " ").title(),
-             "importance": round(float(v) * 100, 2)}
+            {"feature": LABEL_MAP.get(f, f), "importance": round(float(v) * 100, 2)}
             for f, v in sorted(
                 zip(PLANT_HEALTH_FEATURES, imps),
                 key=lambda x: x[1], reverse=True
             )
         ]
 
-    # Feature importance from Watering Need model
     if watering_need_model and hasattr(watering_need_model, "feature_importances_"):
         imps = watering_need_model.feature_importances_
         result["watering_importance"] = [
-            {"feature": f.replace("_%", " %").replace("_", " ").title(),
-             "importance": round(float(v) * 100, 2)}
+            {"feature": LABEL_MAP.get(f, f), "importance": round(float(v) * 100, 2)}
             for f, v in sorted(
                 zip(WATERING_FEATURES, imps),
                 key=lambda x: x[1], reverse=True
             )
         ]
 
-    # Model accuracy summary
     result["model_summary"] = [
-        {"model": "Plant Health Prediction", "algorithm": "Random Forest",
-         "accuracy": "80.44%", "type": "Classification", "member": "Himansa"},
-        {"model": "Watering Need (next 1hr)", "algorithm": "Random Forest",
-         "accuracy": "80.01%", "type": "Classification", "member": "Anupama"},
-        {"model": "Tank Depletion (next 2hr)", "algorithm": "Random Forest",
-         "accuracy": "83.48%", "type": "Classification", "member": "Sadith"},
-        {"model": "Risk Score Forecast", "algorithm": "XGBoost",
-         "accuracy": "R²=92.12%", "type": "Regression", "member": "Rashini"},
+        {"model": "Plant Health Prediction",  "algorithm": "Random Forest", "accuracy": "80.44%",    "type": "Classification", "member": "Himansa"},
+        {"model": "Watering Need (next 1hr)", "algorithm": "Random Forest", "accuracy": "80.01%",    "type": "Classification", "member": "Anupama"},
+        {"model": "Tank Depletion (next 2hr)","algorithm": "Random Forest", "accuracy": "83.48%",    "type": "Classification", "member": "Sadith"},
+        {"model": "Risk Score Forecast",      "algorithm": "XGBoost",       "accuracy": "R²=92.12%", "type": "Regression",     "member": "Rashini"},
     ]
 
     return result
