@@ -44,7 +44,7 @@ export default function LiveData() {
     setTimeout(() => setFlash(false), 700)
   }
 
-  // SSE connection
+  // ── SSE connection (real-time push from server) ────────────────────────────
   useEffect(() => {
     activeRef.current = true
     let retryTimer = null
@@ -83,23 +83,45 @@ export default function LiveData() {
         if (activeRef.current) retryTimer = setTimeout(connect, 5000)
       }
     }
+
     connect()
-    return () => { activeRef.current = false; readerRef.current?.cancel(); clearTimeout(retryTimer) }
+    return () => {
+      activeRef.current = false
+      readerRef.current?.cancel()
+      clearTimeout(retryTimer)
+    }
   }, [])
 
+  // ── Fallback poll every 30s (guarantees data matches MongoDB) ─────────────
+  // This runs alongside SSE — if SSE pushes first, poll just confirms same data.
+  // If SSE misses an update, poll catches it within 30s.
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const res = await api.get('/sensor/latest')
+        onNewData(res.data)
+      } catch(e) { console.error(e) }
+    }, 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  // ── Countdown ticker ──────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setCountdown(c => (c > 0 ? c - 1 : 0)), 1000)
     return () => clearInterval(t)
   }, [])
 
+  // ── Live dot pulse ────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setPulse(p => !p), 1000)
     return () => clearInterval(t)
   }, [])
 
   const refresh = async () => {
-    try { const res = await api.get('/sensor/latest'); onNewData(res.data) }
-    catch (e) { console.error(e) }
+    try {
+      const res = await api.get('/sensor/latest')
+      onNewData(res.data)
+    } catch(e) { console.error(e) }
   }
 
   if (loading) return <div style={styles.loader}>Loading sensor data...</div>
@@ -140,7 +162,9 @@ export default function LiveData() {
             {health === 'Healthy' ? '🌿' : health === 'Warning' ? '⚠️' : '🚨'}
           </div>
           <div>
-            <div style={{ fontSize: '12px', color: '#86a98a', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Plant Health Status</div>
+            <div style={{ fontSize: '12px', color: '#86a98a', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Plant Health Status
+            </div>
             <div style={{ fontSize: '24px', fontWeight: '700', color: hs.color, letterSpacing: '-0.03em' }}>{health}</div>
           </div>
         </div>
@@ -163,7 +187,9 @@ export default function LiveData() {
           </div>
           <div style={styles.miniStat}>
             <span style={{ color: '#86a98a', fontSize: '11px' }}>NODE</span>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', color: '#86a98a' }}>{data?.node_id || '—'}</span>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', color: '#86a98a' }}>
+              {data?.node_id || '—'}
+            </span>
           </div>
         </div>
       </div>
@@ -181,7 +207,9 @@ export default function LiveData() {
                 </span>
               </div>
               <div style={{ ...styles.sensorValue, color: s.color }}>
-                {val !== undefined && val !== null ? (typeof val === 'number' ? val.toFixed(1) : val) : '—'}
+                {val !== undefined && val !== null
+                  ? (typeof val === 'number' ? val.toFixed(1) : val)
+                  : '—'}
                 <span style={styles.unit}>{s.unit}</span>
               </div>
               <div style={styles.sensorLabel}>{s.label}</div>

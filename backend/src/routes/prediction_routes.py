@@ -77,7 +77,7 @@ RISK_SCORE_FEATURES = [
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_latest_reading():
-    doc = sensor_col.find_one(sort=[("timestamp", DESCENDING)])
+    doc = sensor_col.find_one(sort=[("_id", DESCENDING)])
     if not doc:
         raise HTTPException(status_code=404, detail="No sensor data found")
     return doc

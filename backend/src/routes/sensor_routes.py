@@ -16,6 +16,10 @@ Derived fields (computed in Python, not stored in MongoDB):
   plant_health      → Critical / Warning / Healthy based on thresholds
   risk_score        → weighted formula (0-100)
   Risk_level        → Low / Medium / High
+
+FIX: Sort by _id DESCENDING instead of timestamp DESCENDING.
+     ObjectId is always monotonically increasing so it reliably
+     returns the newest document regardless of mixed timestamp types.
 """
 import asyncio
 import json
@@ -23,6 +27,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pymongo import DESCENDING, ASCENDING
+from bson import ObjectId
 
 from auth import require_role, get_current_user
 from config import sensor_col
@@ -37,12 +42,12 @@ def derive_fields(doc: dict) -> dict:
     Compute all fields that are missing from the new dataset.
     These replace the old pre-computed CSV columns.
     """
-    soil    = doc.get("soil_moisture", 0) or 0
-    water   = doc.get("water_level_percent", 0) or 0
-    temp    = doc.get("air_temp", 25) or 25
-    humidity= doc.get("air_humidity", 50) or 50
-    lux     = doc.get("light_lux", 0) or 0
-    raw     = doc.get("water_level_raw", 0) or 0
+    soil     = doc.get("soil_moisture", 0) or 0
+    water    = doc.get("water_level_percent", 0) or 0
+    temp     = doc.get("air_temp", 25) or 25
+    humidity = doc.get("air_humidity", 50) or 50
+    lux      = doc.get("light_lux", 0) or 0
+    raw      = doc.get("water_level_raw", 0) or 0
 
     # Water status
     if water < 20:
@@ -117,20 +122,9 @@ def serialize(doc: dict) -> dict:
     return derive_fields(doc)
 
 
-def parse_ts(ts_str):
-    """Parse ISO timestamp string to datetime."""
-    if isinstance(ts_str, datetime):
-        return ts_str
-    try:
-        return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-    except Exception:
-        return None
-
-
 def date_range_filter(period: str) -> dict:
     """
     Timestamp filter. Handles both ISODate and string timestamps.
-    Uses $expr with $gte on string comparison for ISO format strings.
     """
     now = datetime.utcnow()
 
@@ -170,7 +164,10 @@ def time_group_by_period(period: str) -> dict:
 
 @router.get("/latest")
 def get_latest(user=Depends(require_role("gardener", "admin", "owner"))):
-    doc = sensor_col.find_one(sort=[("timestamp", DESCENDING)])
+    """Sort by _id DESCENDING — ObjectId is monotonically increasing,
+    so this always returns the truly newest document regardless of
+    mixed timestamp types in the collection."""
+    doc = sensor_col.find_one(sort=[("_id", DESCENDING)])
     if not doc:
         return {}
     return serialize(doc)
@@ -184,8 +181,10 @@ async def stream_sensor(user=Depends(require_role("gardener", "admin", "owner"))
         last_id = None
 
         def _fetch():
-            return sensor_col.find_one(sort=[("timestamp", DESCENDING)])
+            # Sort by _id to reliably get the latest document
+            return sensor_col.find_one(sort=[("_id", DESCENDING)])
 
+        # Send current reading immediately on connect
         doc = await asyncio.to_thread(_fetch)
         if doc:
             last_id = str(doc["_id"])
@@ -205,7 +204,7 @@ async def stream_sensor(user=Depends(require_role("gardener", "admin", "owner"))
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
+            "Connection":    "keep-alive",
             "X-Accel-Buffering": "no",
         },
     )
@@ -235,13 +234,13 @@ def get_alerts(
     user=Depends(require_role("gardener", "admin", "owner"))
 ):
     """
-    Since plant_health is derived (not stored), we fetch recent docs
-    and filter by derived plant_health in Python.
+    plant_health is derived (not stored), so fetch recent docs
+    sorted by _id and filter by derived plant_health in Python.
     """
     docs = sensor_col.find(
         {},
-        sort=[("timestamp", DESCENDING)],
-        limit=limit * 3   # fetch extra to account for filtering
+        sort=[("_id", DESCENDING)],
+        limit=limit * 3
     )
     alerts = []
     for d in docs:
@@ -279,7 +278,7 @@ def get_kpi(
     r = result[0]
     r.pop("_id", None)
 
-    # Compute derived counts by fetching docs in period and deriving
+    # Compute derived counts in Python
     docs = list(sensor_col.find(match))
     critical_count = 0
     warning_count  = 0
@@ -288,9 +287,9 @@ def get_kpi(
     for d in docs:
         en = derive_fields(dict(d))
         ph = en.get("plant_health")
-        if ph == "Critical": critical_count += 1
-        elif ph == "Warning": warning_count += 1
-        else: healthy_count += 1
+        if ph == "Critical":   critical_count += 1
+        elif ph == "Warning":  warning_count  += 1
+        else:                  healthy_count  += 1
         risk_total += en.get("risk_score", 0)
 
     r["critical_count"] = critical_count
@@ -363,7 +362,7 @@ def get_env_trend(
     period: str = Query("week", enum=["today", "week", "month", "Q1", "Q2", "Q3", "Q4"]),
     user=Depends(require_role("owner", "admin"))
 ):
-    match  = date_range_filter(period)
+    match    = date_range_filter(period)
     group_by = time_group_by_period(period)
     pipeline = [
         {"$match": match},
@@ -437,7 +436,7 @@ def get_critical_events(
     user=Depends(require_role("owner", "admin"))
 ):
     match = date_range_filter(period)
-    docs  = sensor_col.find(match, sort=[("timestamp", DESCENDING)], limit=limit * 3)
+    docs  = sensor_col.find(match, sort=[("_id", DESCENDING)], limit=limit * 3)
     critical = []
     for d in docs:
         en = serialize(d)
