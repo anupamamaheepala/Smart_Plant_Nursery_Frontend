@@ -7,14 +7,23 @@ function fmt(ts) {
 }
 
 export default function Alerts() {
-  const [alerts, setAlerts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [alerts, setAlerts]           = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   useEffect(() => {
-    api.get('/sensor/alerts?limit=100')
-      .then(r => setAlerts(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    const fetch = () => {
+      api.get('/sensor/alerts?limit=100')
+        .then(r => {
+          setAlerts(r.data)
+          setLastUpdated(new Date())
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    }
+    fetch()
+    const interval = setInterval(fetch, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const critical = alerts.filter(a => a.plant_health === 'Critical')
@@ -25,7 +34,10 @@ export default function Alerts() {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>Alerts</h1>
-          <p style={styles.sub}>Warning and Critical events from sensor readings</p>
+          <p style={styles.sub}>
+            Warning and Critical events · auto-refreshes every 30s
+            {lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}
+          </p>
         </div>
       </div>
 

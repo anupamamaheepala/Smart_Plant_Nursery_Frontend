@@ -23,14 +23,23 @@ function timeFmt(ts) {
 }
 
 export default function Trends() {
-  const [data, setData]     = useState([])
-  const [loading, setLoading] = useState(true)
+  const [data, setData]               = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   useEffect(() => {
-    api.get('/sensor/today')
-      .then(r => setData(r.data.map(d => ({ ...d, time: timeFmt(d.timestamp) }))))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    const fetch = () => {
+      api.get('/sensor/today')
+        .then(r => {
+          setData(r.data.map(d => ({ ...d, time: timeFmt(d.timestamp) })))
+          setLastUpdated(new Date())
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    }
+    fetch()
+    const interval = setInterval(fetch, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   if (loading) return <div style={styles.loader}>Loading trends...</div>
@@ -72,7 +81,10 @@ export default function Trends() {
     <div>
       <div style={styles.header}>
         <h1 style={styles.title}>Trends</h1>
-        <p style={styles.sub}>Last 24 hours of sensor data · {data.length} readings</p>
+        <p style={styles.sub}>
+          Last 24 hours · {data.length} readings
+          {lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}
+        </p>
       </div>
 
       <div style={styles.grid}>

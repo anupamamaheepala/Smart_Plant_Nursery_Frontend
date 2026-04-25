@@ -5,6 +5,7 @@ All sensor data endpoints.
 
 Gardener endpoints:
   GET /sensor/latest          → most recent reading (Live page)
+  GET /sensor/stream          → SSE stream: pushes latest reading when new data arrives
   GET /sensor/today           → last 24h readings (Trends page)
   GET /sensor/alerts          → Warning + Critical readings (Alerts page)
 
@@ -18,9 +19,12 @@ Owner endpoints:
   GET /sensor/water-trend     → water level over time
   GET /sensor/critical-events → all Critical health records
 """
+import asyncio
+import json
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pymongo import DESCENDING, ASCENDING
 
 from auth import require_role, get_current_user
@@ -99,6 +103,43 @@ def get_latest(user=Depends(require_role("gardener", "admin", "owner"))):
     if not doc:
         return {}
     return serialize(doc)
+
+
+# ── GARDENER: SSE Stream ─────────────────────────────────────────────────────
+
+@router.get("/stream")
+async def stream_sensor(user=Depends(require_role("gardener", "admin", "owner"))):
+    """SSE: pushes the latest sensor reading whenever a new document appears in MongoDB."""
+    async def generate():
+        last_id = None
+
+        def _fetch():
+            return sensor_col.find_one(sort=[("timestamp", DESCENDING)])
+
+        # Send the current reading immediately on connect
+        doc = await asyncio.to_thread(_fetch)
+        if doc:
+            last_id = str(doc["_id"])
+            yield f"data: {json.dumps(serialize(doc))}\n\n"
+
+        while True:
+            await asyncio.sleep(28)
+            doc = await asyncio.to_thread(_fetch)
+            if doc:
+                doc_id = str(doc["_id"])
+                if doc_id != last_id:
+                    last_id = doc_id
+                    yield f"data: {json.dumps(serialize(doc))}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ── GARDENER: Last 24 Hours ───────────────────────────────────────────────────
