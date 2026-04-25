@@ -5,6 +5,7 @@ const NAV = [
   { to: 'live',   label: 'Live Data',  icon: '⬤' },
   { to: 'alerts', label: 'Alerts',     icon: '⚠' },
   { to: 'trends', label: 'Trends',     icon: '↗' },
+  { to: 'predictions', label: 'AI Insights', icon: '🤖' },
 ]
 
 export default function GardenerLayout() {

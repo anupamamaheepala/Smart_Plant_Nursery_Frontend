@@ -6,6 +6,7 @@ import GardenerLayout from './pages/gardener/GardenerLayout'
 import LiveData from './pages/gardener/LiveData'
 import Alerts from './pages/gardener/Alerts'
 import Trends from './pages/gardener/Trends'
+import AIPredictions from './pages/gardener/AIPredictions'
 import OwnerDashboard from './pages/owner/OwnerDashboard'
 import UserManagement from './pages/admin/UserManagement'
 
@@ -33,9 +34,10 @@ export default function App() {
             </ProtectedRoute>
           }>
             <Route index element={<Navigate to="live" replace />} />
-            <Route path="live"   element={<LiveData />} />
-            <Route path="alerts" element={<Alerts />} />
-            <Route path="trends" element={<Trends />} />
+            <Route path="live"        element={<LiveData />} />
+            <Route path="alerts"      element={<Alerts />} />
+            <Route path="trends"      element={<Trends />} />
+            <Route path="predictions" element={<AIPredictions />} />
           </Route>
 
           {/* Owner */}

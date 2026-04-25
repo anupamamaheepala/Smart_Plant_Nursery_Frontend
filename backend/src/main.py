@@ -8,9 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from routes.auth_routes   import router as auth_router
-from routes.sensor_routes import router as sensor_router
-from routes.user_routes   import router as user_router
+from routes.auth_routes        import router as auth_router
+from routes.sensor_routes      import router as sensor_router
+from routes.user_routes        import router as user_router
+from routes.prediction_routes  import router as prediction_router
 
 app = FastAPI(
     title="Plant Nursery IoT API",
@@ -18,7 +19,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# ── CORS — only needed in dev (React dev server on :3000) ─────────────────────
+# ── CORS — only needed in dev (React dev server on :5173) ────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
@@ -27,10 +28,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── API Routers (prefix with /api so they don't clash with React routes) ──────
-app.include_router(auth_router,   prefix="/api")
-app.include_router(sensor_router, prefix="/api")
-app.include_router(user_router,   prefix="/api")
+# ── API Routers ───────────────────────────────────────────────────────────────
+app.include_router(auth_router,       prefix="/api")
+app.include_router(sensor_router,     prefix="/api")
+app.include_router(user_router,       prefix="/api")
+app.include_router(prediction_router, prefix="/api")
 
 
 @app.get("/api/health", tags=["Health"])
@@ -42,7 +44,8 @@ def health():
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 if os.path.exists(FRONTEND_DIST):
-    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+    app.mount("/assets", StaticFiles(
+        directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     def serve_frontend(full_path: str):
